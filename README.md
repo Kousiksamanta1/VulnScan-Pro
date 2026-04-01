@@ -209,13 +209,6 @@ python3 build_release.py
 
 The project also includes `pyproject.toml` so it can be installed and scripted as a standard Python package.
 
-## Dissertation Readiness
-
-- Use the GUI for demonstrations and the CLI for repeatable benchmark runs.
-- Keep exported JSON and HTML reports as dissertation evidence because they now include configuration and runtime provenance.
-- Use the controlled local lab in `benchmarks/` to produce precision, recall, false-positive, and scan-time results.
-- Follow the checklist in `docs/dissertation-readiness.md` for benchmarking, archiving, ethics, and publication preparation.
-
 ## Notes
 
 - Web findings should be treated as strong indicators for manual verification, not as a full web application penetration test.
