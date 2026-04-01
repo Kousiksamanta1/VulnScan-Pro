@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import queue
 import threading
 import time
@@ -11,12 +12,20 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import Any
-from uuid import uuid4
 
 import customtkinter as ctk
 
+from benchmark_lab import list_targets, run_lab_command
+from benchmark_metrics import evaluate_run_directory, write_evaluation_summary
+from benchmark_runner import parse_requested_tools, run_benchmark
 from scanner_engine import ScannerEngine
 from scanner_reporting import export_scan_results
+from scanner_session import (
+    append_scan_error,
+    build_blank_scan_results,
+    finalize_scan_results,
+    seed_scan_results,
+)
 from scanner_storage import (
     append_history,
     build_scan_snapshot,
@@ -227,7 +236,9 @@ class ScannerApp(ctk.CTk):
         self.settings = load_settings()
         self.history_entries = load_history()
         self.message_queue: queue.Queue[dict[str, Any]] = queue.Queue()
+        self.benchmark_queue: queue.Queue[dict[str, Any]] = queue.Queue()
         self.scan_thread: threading.Thread | None = None
+        self.benchmark_thread: threading.Thread | None = None
         self.stop_event = threading.Event()
         self.port_results: dict[int, dict[str, Any]] = {}
         self.scan_results = self._blank_scan_results()
@@ -235,6 +246,10 @@ class ScannerApp(ctk.CTk):
         self.scan_started_monotonic: float | None = None
         self._window_icon: tk.PhotoImage | None = None
         self.nav_buttons: dict[str, ctk.CTkButton] = {}
+        self.benchmark_action_buttons: list[ctk.CTkButton] = []
+        self.benchmark_targets_path = (Path(__file__).resolve().parent / "benchmarks" / "targets.json")
+        self.benchmark_compose_path = (Path(__file__).resolve().parent / "benchmarks" / "docker-compose.yml")
+        self.benchmark_results_root = (Path(__file__).resolve().parent / "benchmarks" / "results")
 
         self.target_var = tk.StringVar(value=self.settings.get("last_target", ""))
         self.port_profile_var = tk.StringVar(value=self.settings.get("port_profile", "common"))
@@ -254,12 +269,20 @@ class ScannerApp(ctk.CTk):
         self.risk_var = tk.StringVar(value="INFO")
         self.tls_grade_var = tk.StringVar(value="Unavailable")
         self.duration_var = tk.StringVar(value="0.0s")
+        self.benchmark_tools_var = tk.StringVar(value="vulnscan,nmap,zap")
+        self.benchmark_target_ids_var = tk.StringVar(value="")
+        self.benchmark_output_dir_var = tk.StringVar(value=str(self.benchmark_results_root))
+        self.benchmark_run_dir_var = tk.StringVar(value="")
+        self.benchmark_status_var = tk.StringVar(value="Ready")
+        self.benchmark_skip_missing_var = tk.BooleanVar(value=True)
 
         self._apply_window_icon()
         self._build_layout()
         self._reset_results_state(clear_logs=True)
         self._refresh_history_list()
+        self.refresh_benchmark_targets()
         self.after(120, self._process_message_queue)
+        self.after(160, self._process_benchmark_queue)
         self.after(400, self._refresh_live_duration)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -328,6 +351,7 @@ class ScannerApp(ctk.CTk):
             ("Port Scanner", "Ports"),
             ("Web Vulns", "Web"),
             ("Intel", "Intel"),
+            ("Benchmarks", "Benchmark"),
             ("History", "History"),
             ("Settings", "Settings"),
         ]
@@ -347,7 +371,7 @@ class ScannerApp(ctk.CTk):
 
         footer = ctk.CTkLabel(
             sidebar,
-            text="Stop scans safely, filter high-risk ports, compare history, and export professional reports.",
+            text="Stop scans safely, compare history, run benchmark labs, and export professional reports.",
             justify="left",
             wraplength=210,
             text_color="#64748b",
@@ -588,13 +612,14 @@ class ScannerApp(ctk.CTk):
             segmented_button_selected_hover_color="#1d4ed8",
         )
         self.tabview.grid(row=3, column=0, sticky="nsew")
-        for tab_name in ["Overview", "Ports", "Web", "Intel", "History", "Settings"]:
+        for tab_name in ["Overview", "Ports", "Web", "Intel", "Benchmark", "History", "Settings"]:
             self.tabview.add(tab_name)
 
         self._build_overview_tab()
         self._build_ports_tab()
         self._build_web_tab()
         self._build_intel_tab()
+        self._build_benchmark_tab()
         self._build_history_tab()
         self._build_settings_tab()
         self._set_active_tab("Overview")
@@ -698,6 +723,116 @@ class ScannerApp(ctk.CTk):
 
         tls_frame, self.tls_box = self._create_textbox_card(tab, "TLS Posture")
         tls_frame.grid(row=0, column=1, sticky="nsew", pady=16)
+
+    def _build_benchmark_tab(self) -> None:
+        """Build the benchmark tab for local lab control and evaluation runs."""
+        tab = self.tabview.tab("Benchmark")
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_columnconfigure(1, weight=1)
+        tab.grid_rowconfigure(1, weight=1)
+        tab.grid_rowconfigure(2, weight=1)
+
+        controls = ctk.CTkFrame(tab, corner_radius=24, fg_color="#0f172a")
+        controls.grid(row=0, column=0, columnspan=2, sticky="ew", pady=16)
+        for column in range(4):
+            controls.grid_columnconfigure(column, weight=1)
+
+        labels = [
+            ("Tools", self.benchmark_tools_var),
+            ("Target IDs", self.benchmark_target_ids_var),
+            ("Results Root", self.benchmark_output_dir_var),
+            ("Active Run", self.benchmark_run_dir_var),
+        ]
+        for column, (label_text, variable) in enumerate(labels):
+            label = ctk.CTkLabel(
+                controls,
+                text=label_text,
+                text_color="#94a3b8",
+                font=ctk.CTkFont(family="Avenir Next", size=11, weight="bold"),
+            )
+            label.grid(row=0, column=column, padx=12, pady=(16, 6), sticky="w")
+            entry = ctk.CTkEntry(
+                controls,
+                textvariable=variable,
+                height=42,
+            )
+            entry.grid(row=1, column=column, padx=12, pady=(0, 12), sticky="ew")
+
+        status_frame = ctk.CTkFrame(controls, fg_color="transparent")
+        status_frame.grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 14))
+
+        benchmark_status = ctk.CTkLabel(
+            status_frame,
+            textvariable=self.benchmark_status_var,
+            fg_color="#132033",
+            corner_radius=14,
+            text_color="#93c5fd",
+            font=ctk.CTkFont(family="Avenir Next", size=12, weight="bold"),
+            padx=14,
+            pady=8,
+        )
+        benchmark_status.pack(side="left")
+
+        benchmark_hint = ctk.CTkLabel(
+            status_frame,
+            text="Uses the current timeout and worker values from the main control strip.",
+            text_color="#94a3b8",
+            font=ctk.CTkFont(family="Avenir Next", size=12),
+        )
+        benchmark_hint.pack(side="left", padx=(10, 0))
+
+        self.benchmark_skip_missing_switch = ctk.CTkSwitch(
+            controls,
+            text="Skip missing baseline tools",
+            variable=self.benchmark_skip_missing_var,
+        )
+        self.benchmark_skip_missing_switch.grid(row=2, column=2, sticky="w", padx=12, pady=(0, 14))
+
+        button_frame = ctk.CTkFrame(controls, fg_color="transparent")
+        button_frame.grid(row=3, column=0, columnspan=4, sticky="ew", padx=12, pady=(0, 16))
+
+        button_specs = [
+            ("Refresh Targets", self.refresh_benchmark_targets, "#132033", "#1d2f4d"),
+            ("Lab Up", lambda: self.run_benchmark_lab_action("up"), "#2563eb", "#1d4ed8"),
+            ("Lab Ps", lambda: self.run_benchmark_lab_action("ps"), "#132033", "#1d2f4d"),
+            ("Lab Down", lambda: self.run_benchmark_lab_action("down"), "#ef4444", "#dc2626"),
+            ("Run Benchmark", self.run_benchmark_suite, "#14b8a6", "#0f766e"),
+            ("Evaluate Run", self.evaluate_benchmark_run, "#f59e0b", "#d97706"),
+        ]
+        for label_text, command, fg_color, hover_color in button_specs:
+            button = ctk.CTkButton(
+                button_frame,
+                text=label_text,
+                command=command,
+                fg_color=fg_color,
+                hover_color=hover_color,
+            )
+            button.pack(side="left", padx=(0, 10))
+            self.benchmark_action_buttons.append(button)
+
+        targets_frame, self.benchmark_targets_box = self._create_textbox_card(
+            tab,
+            "Benchmark Targets",
+        )
+        targets_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10), pady=(0, 10))
+
+        activity_frame, self.benchmark_log_box = self._create_textbox_card(
+            tab,
+            "Benchmark Activity",
+        )
+        activity_frame.grid(row=1, column=1, sticky="nsew", pady=(0, 10))
+
+        summary_frame, self.benchmark_summary_box = self._create_textbox_card(
+            tab,
+            "Evaluation Summary",
+        )
+        summary_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 10), pady=(10, 16))
+
+        details_frame, self.benchmark_details_box = self._create_textbox_card(
+            tab,
+            "Run Details",
+        )
+        details_frame.grid(row=2, column=1, sticky="nsew", pady=(10, 16))
 
     def _build_history_tab(self) -> None:
         """Build the history tab with previous scans and comparison output."""
@@ -866,21 +1001,7 @@ class ScannerApp(ctk.CTk):
 
     def _blank_scan_results(self) -> dict[str, Any]:
         """Return a fresh scan result payload."""
-        return {
-            "scan_id": "",
-            "target_input": "",
-            "target": "",
-            "url": "",
-            "status": "idle",
-            "started_at": "",
-            "finished_at": "",
-            "duration_seconds": 0.0,
-            "ports_requested": [],
-            "ports": [],
-            "dns": {},
-            "web": {},
-            "tls": {},
-        }
+        return build_blank_scan_results(mode="gui")
 
     def _reset_results_state(self, clear_logs: bool = False) -> None:
         """Reset in-memory scan results and refresh the visible UI."""
@@ -920,6 +1041,7 @@ class ScannerApp(ctk.CTk):
             "target": target,
             "prepared": prepared,
             "ports": ports,
+            "port_spec": port_spec,
             "timeout": timeout,
             "max_workers": max_workers,
             "history_limit": history_limit,
@@ -940,17 +1062,15 @@ class ScannerApp(ctk.CTk):
         self.stop_event = threading.Event()
         self.port_results = {}
         self.scan_started_monotonic = time.perf_counter()
-        self.scan_results = self._blank_scan_results()
-        self.scan_results.update(
-            {
-                "scan_id": uuid4().hex[:10],
-                "target_input": runtime["target"],
-                "target": runtime["prepared"]["hostname"],
-                "url": runtime["prepared"]["url"],
-                "status": "running",
-                "started_at": datetime.now().isoformat(timespec="seconds"),
-                "ports_requested": runtime["ports"],
-            }
+        self.scan_results = seed_scan_results(
+            mode="gui",
+            target_input=runtime["target"],
+            prepared_target=runtime["prepared"],
+            ports=runtime["ports"],
+            timeout=runtime["timeout"],
+            max_workers=runtime["max_workers"],
+            port_spec=runtime["port_spec"],
+            export_format=self.export_format_var.get(),
         )
 
         self._set_textbox_content(self.log_box, "")
@@ -1017,6 +1137,288 @@ class ScannerApp(ctk.CTk):
             self._handle_scan_event(event)
         self.after(120, self._process_message_queue)
 
+    def _process_benchmark_queue(self) -> None:
+        """Process queued benchmark events on the Tk main loop."""
+        while True:
+            try:
+                event = self.benchmark_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._handle_benchmark_event(event)
+        self.after(160, self._process_benchmark_queue)
+
+    def refresh_benchmark_targets(self) -> None:
+        """Load the benchmark target definitions into the GUI."""
+        self._launch_benchmark_task(
+            "targets",
+            status_text="Loading Targets",
+            targets_path=str(self.benchmark_targets_path),
+        )
+
+    def run_benchmark_lab_action(self, command: str) -> None:
+        """Run a benchmark lab lifecycle command from the GUI."""
+        self._launch_benchmark_task(
+            "lab",
+            status_text=f"Lab {command.upper()}",
+            command=command,
+            compose_path=str(self.benchmark_compose_path),
+        )
+
+    def run_benchmark_suite(self) -> None:
+        """Execute the benchmark runner from the GUI."""
+        try:
+            timeout = float(self.timeout_var.get().strip() or "2.0")
+            max_workers = int(self.max_workers_var.get().strip() or "32")
+            if timeout <= 0 or max_workers <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror(
+                "Invalid Benchmark Settings",
+                "Timeout and worker count must be positive before running benchmarks.",
+            )
+            return
+
+        try:
+            tools = parse_requested_tools(self.benchmark_tools_var.get())
+        except ValueError as exc:
+            messagebox.showerror("Invalid Benchmark Tools", str(exc))
+            return
+
+        output_dir = Path(self.benchmark_output_dir_var.get().strip() or str(self.benchmark_results_root))
+        self._launch_benchmark_task(
+            "run",
+            status_text="Running Benchmarks",
+            targets_path=str(self.benchmark_targets_path),
+            output_dir=str(output_dir.expanduser()),
+            tools=tools,
+            target_ids=self.benchmark_target_ids_var.get().strip(),
+            timeout=timeout,
+            workers=max_workers,
+            skip_missing_tools=bool(self.benchmark_skip_missing_var.get()),
+        )
+
+    def evaluate_benchmark_run(self) -> None:
+        """Evaluate the current or latest benchmark run from the GUI."""
+        try:
+            run_dir = self._resolve_benchmark_run_dir()
+        except ValueError as exc:
+            messagebox.showerror("No Benchmark Run", str(exc))
+            return
+
+        self._launch_benchmark_task(
+            "evaluate",
+            status_text="Evaluating Run",
+            run_dir=str(run_dir),
+            targets_path=str(self.benchmark_targets_path),
+        )
+
+    def _launch_benchmark_task(self, task_name: str, *, status_text: str, **payload: Any) -> None:
+        """Start a background benchmark task if one is not already running."""
+        if self.benchmark_thread and self.benchmark_thread.is_alive():
+            messagebox.showinfo(
+                "Benchmark Busy",
+                "A benchmark action is already in progress. Please wait for it to finish.",
+            )
+            return
+
+        self.benchmark_status_var.set(status_text)
+        self._set_benchmark_controls_enabled(False)
+        self._append_benchmark_log(f"{status_text}...")
+        self.benchmark_thread = threading.Thread(
+            target=self._run_benchmark_task,
+            args=(task_name, payload),
+            daemon=True,
+        )
+        self.benchmark_thread.start()
+
+    def _run_benchmark_task(self, task_name: str, payload: dict[str, Any]) -> None:
+        """Execute one benchmark task and stream its results back to the GUI."""
+        try:
+            if task_name == "targets":
+                targets = list_targets(Path(payload["targets_path"]))
+                self.benchmark_queue.put(
+                    {
+                        "type": "benchmark_targets_loaded",
+                        "targets": targets,
+                    }
+                )
+                return
+
+            if task_name == "lab":
+                output = run_lab_command(
+                    str(payload["command"]),
+                    Path(payload["compose_path"]),
+                )
+                self.benchmark_queue.put(
+                    {
+                        "type": "benchmark_lab_complete",
+                        "command": payload["command"],
+                        "output": output,
+                    }
+                )
+                return
+
+            if task_name == "run":
+                result = run_benchmark(
+                    targets_path=Path(payload["targets_path"]),
+                    output_dir=Path(payload["output_dir"]),
+                    tools=list(payload["tools"]),
+                    target_ids=str(payload.get("target_ids", "")),
+                    timeout=float(payload["timeout"]),
+                    workers=int(payload["workers"]),
+                    skip_missing_tools=bool(payload["skip_missing_tools"]),
+                    progress_callback=lambda event: self.benchmark_queue.put(
+                        {
+                            "type": "benchmark_progress",
+                            "event": event,
+                        }
+                    ),
+                )
+                summary = json.loads(Path(result["evaluation_path"]).read_text(encoding="utf-8"))
+                self.benchmark_queue.put(
+                    {
+                        "type": "benchmark_run_complete",
+                        "result": result,
+                        "summary": summary,
+                    }
+                )
+                return
+
+            if task_name == "evaluate":
+                run_dir = Path(payload["run_dir"])
+                evaluation_path = write_evaluation_summary(
+                    run_dir,
+                    Path(payload["targets_path"]),
+                )
+                summary = evaluate_run_directory(
+                    run_dir,
+                    Path(payload["targets_path"]),
+                )
+                run_metadata_path = run_dir / "run-metadata.json"
+                run_metadata = {}
+                if run_metadata_path.exists():
+                    run_metadata = json.loads(run_metadata_path.read_text(encoding="utf-8"))
+                self.benchmark_queue.put(
+                    {
+                        "type": "benchmark_evaluation_complete",
+                        "run_dir": run_dir,
+                        "evaluation_path": evaluation_path,
+                        "summary": summary,
+                        "run_metadata": run_metadata,
+                    }
+                )
+                return
+
+            raise ValueError(f"Unsupported benchmark task '{task_name}'.")
+        except Exception as exc:
+            self.benchmark_queue.put(
+                {
+                    "type": "benchmark_error",
+                    "message": str(exc),
+                }
+            )
+        finally:
+            self.benchmark_queue.put({"type": "benchmark_done"})
+
+    def _handle_benchmark_event(self, event: dict[str, Any]) -> None:
+        """Route a benchmark event to the correct GUI updates."""
+        event_type = event.get("type")
+
+        if event_type == "benchmark_progress":
+            progress = event.get("event", {})
+            progress_type = progress.get("type")
+            if progress_type == "target_started":
+                self._append_benchmark_log(
+                    f"Starting target {progress.get('target_name', progress.get('target_id', 'unknown'))}."
+                )
+            elif progress_type == "tool_started":
+                self._append_benchmark_log(
+                    f"Running {progress.get('tool', 'tool')} on {progress.get('target_id', 'target')}."
+                )
+            elif progress_type == "tool_finished":
+                result = progress.get("result", {})
+                self._append_benchmark_log(
+                    f"{progress.get('tool', 'tool')} finished for {progress.get('target_id', 'target')} "
+                    f"with status {result.get('status', 'unknown')}."
+                )
+            return
+
+        if event_type == "benchmark_targets_loaded":
+            targets = event.get("targets", [])
+            self._set_textbox_content(
+                self.benchmark_targets_box,
+                self._format_benchmark_targets_text(targets),
+            )
+            if not self.benchmark_details_box.get("1.0", "end").strip():
+                self._set_textbox_content(
+                    self.benchmark_details_box,
+                    "No benchmark run selected yet.",
+                )
+            self.benchmark_status_var.set("Ready")
+            self._append_benchmark_log(f"Loaded {len(targets)} benchmark target definitions.")
+            return
+
+        if event_type == "benchmark_lab_complete":
+            command = str(event.get("command", "")).upper()
+            output = str(event.get("output", "")).strip()
+            self.benchmark_status_var.set(f"Lab {command}")
+            self._append_benchmark_log(f"Lab command {command} completed.")
+            if output:
+                self._append_benchmark_log(output)
+            return
+
+        if event_type == "benchmark_run_complete":
+            result = event["result"]
+            summary = event["summary"]
+            self.benchmark_run_dir_var.set(str(result["run_dir"]))
+            self.benchmark_status_var.set("Benchmark Complete")
+            self._set_textbox_content(
+                self.benchmark_summary_box,
+                self._format_benchmark_summary_text(summary),
+            )
+            self._set_textbox_content(
+                self.benchmark_details_box,
+                self._format_benchmark_run_details(result["run_metadata"], result),
+            )
+            self._append_benchmark_log(f"Benchmark run saved to {result['run_dir']}.")
+            self._append_log(f"Benchmark run completed: {result['run_dir']}")
+            return
+
+        if event_type == "benchmark_evaluation_complete":
+            run_dir = event["run_dir"]
+            summary = event["summary"]
+            evaluation_path = event["evaluation_path"]
+            run_metadata = event.get("run_metadata", {})
+            self.benchmark_run_dir_var.set(str(run_dir))
+            self.benchmark_status_var.set("Evaluation Complete")
+            self._set_textbox_content(
+                self.benchmark_summary_box,
+                self._format_benchmark_summary_text(summary),
+            )
+            self._set_textbox_content(
+                self.benchmark_details_box,
+                self._format_benchmark_run_details(
+                    run_metadata,
+                    {
+                        "run_dir": run_dir,
+                        "metadata_path": run_dir / "run-metadata.json",
+                        "evaluation_path": evaluation_path,
+                    },
+                ),
+            )
+            self._append_benchmark_log(f"Evaluation refreshed for {run_dir}.")
+            self._append_benchmark_log(f"Saved evaluation summary to {evaluation_path}.")
+            return
+
+        if event_type == "benchmark_error":
+            self.benchmark_status_var.set("Benchmark Error")
+            self._append_benchmark_log(event.get("message", "Unknown benchmark error."))
+            return
+
+        if event_type == "benchmark_done":
+            self._set_benchmark_controls_enabled(True)
+            self.benchmark_thread = None
+
     def _handle_scan_event(self, event: dict[str, Any]) -> None:
         """Route a scanner event to the correct UI and state update path."""
         event_type = event.get("type")
@@ -1056,6 +1458,10 @@ class ScannerApp(ctk.CTk):
         if event_type == "web":
             self.scan_results["web"] = event["result"]
             if event["result"].get("status") == "error":
+                append_scan_error(
+                    self.scan_results,
+                    event["result"].get("message", "Unknown web analysis error."),
+                )
                 self._append_log(f"Web checks failed: {event['result'].get('message', 'Unknown error')}")
             else:
                 self._append_log("Web posture analysis updated.")
@@ -1069,6 +1475,10 @@ class ScannerApp(ctk.CTk):
             return
 
         if event_type == "error":
+            append_scan_error(
+                self.scan_results,
+                event.get("message", "An unknown error occurred."),
+            )
             self._append_log(event.get("message", "An unknown error occurred."))
             return
 
@@ -1086,13 +1496,13 @@ class ScannerApp(ctk.CTk):
 
     def _finalize_scan(self, status: str, message: str) -> None:
         """Complete the scan lifecycle, save history, and refresh the dashboard."""
-        self.scan_results["status"] = status
-        self.scan_results["finished_at"] = datetime.now().isoformat(timespec="seconds")
-        if self.scan_started_monotonic is not None:
-            self.scan_results["duration_seconds"] = round(
-                time.perf_counter() - self.scan_started_monotonic,
-                2,
-            )
+        finalize_scan_results(
+            self.scan_results,
+            status=status,
+            scan_started_monotonic=self.scan_started_monotonic,
+        )
+        if status != "completed":
+            append_scan_error(self.scan_results, message)
         self.scan_status_var.set(status.title())
         self.progress_bar.set(1.0 if status == "completed" else self.progress_bar.get())
         self.progress_text_var.set("Scan complete." if status == "completed" else "Scan cancelled.")
@@ -1512,6 +1922,132 @@ class ScannerApp(ctk.CTk):
         else:
             lines.append("- No TLS findings recorded.")
         return "\n".join(lines)
+
+    def _format_benchmark_targets_text(self, targets: list[dict[str, Any]]) -> str:
+        """Create the benchmark target definition pane content."""
+        if not targets:
+            return "No benchmark targets are configured."
+
+        lines: list[str] = []
+        for target in targets:
+            lines.extend(
+                [
+                    f"{target.get('name', target.get('id', 'Unknown target'))}",
+                    f"ID: {target.get('id', '')}",
+                    f"Host: {target.get('host', 'N/A') or 'N/A'}",
+                    f"URL: {target.get('url', 'N/A') or 'N/A'}",
+                    f"Ports: {target.get('port_spec', 'common')}",
+                    f"Expected findings: {', '.join(target.get('expected_findings', [])) or 'None'}",
+                    "",
+                ]
+            )
+        return "\n".join(lines).strip()
+
+    def _format_benchmark_summary_text(self, summary: dict[str, Any]) -> str:
+        """Create the evaluation summary pane content."""
+        if not summary.get("tools"):
+            return "No benchmark evaluation summary is available yet."
+
+        lines = [
+            f"Generated: {summary.get('generated_at', '')}",
+            f"Results dir: {summary.get('results_dir', '')}",
+            "",
+        ]
+        for tool_name, tool_summary in summary.get("tools", {}).items():
+            lines.extend(
+                [
+                    f"{tool_name.upper()}",
+                    f"Targets: {tool_summary.get('target_count', 0)}",
+                    (
+                        f"Precision={tool_summary.get('precision', 0.0):.4f} | "
+                        f"Recall={tool_summary.get('recall', 0.0):.4f} | "
+                        f"F1={tool_summary.get('f1_score', 0.0):.4f}"
+                    ),
+                    (
+                        f"TP={tool_summary.get('true_positive_count', 0)} | "
+                        f"FP={tool_summary.get('false_positive_count', 0)} | "
+                        f"FN={tool_summary.get('false_negative_count', 0)}"
+                    ),
+                    (
+                        "Average duration: "
+                        f"{tool_summary.get('average_duration_seconds', 'N/A')} seconds"
+                    ),
+                    "Per target:",
+                ]
+            )
+            for target in tool_summary.get("targets", []):
+                lines.append(
+                    (
+                        f"- {target.get('target_name', target.get('target_id', 'target'))}: "
+                        f"P={target.get('precision', 0.0):.4f}, "
+                        f"R={target.get('recall', 0.0):.4f}, "
+                        f"F1={target.get('f1_score', 0.0):.4f}, "
+                        f"Duration={target.get('duration_seconds', 'N/A')}s"
+                    )
+                )
+            lines.append("")
+        return "\n".join(lines).strip()
+
+    def _format_benchmark_run_details(
+        self,
+        run_metadata: dict[str, Any],
+        result: dict[str, Any],
+    ) -> str:
+        """Create the benchmark run details pane content."""
+        lines = [
+            f"Run directory: {result.get('run_dir', '')}",
+            f"Metadata file: {result.get('metadata_path', '')}",
+            f"Evaluation file: {result.get('evaluation_path', '')}",
+            f"Generated: {run_metadata.get('generated_at', '')}",
+            f"Tools requested: {', '.join(run_metadata.get('tools_requested', [])) or 'None'}",
+            "",
+            "Target runs:",
+        ]
+        for target in run_metadata.get("targets", []):
+            lines.append(f"- {target.get('name', target.get('id', 'target'))}")
+            for tool_name, tool_run in target.get("tool_runs", {}).items():
+                lines.append(
+                    (
+                        f"  {tool_name}: status={tool_run.get('status', 'unknown')} | "
+                        f"duration={tool_run.get('duration_seconds', 'N/A')}s | "
+                        f"output={tool_run.get('output_path', '') or 'N/A'}"
+                    )
+                )
+                if tool_run.get("error"):
+                    lines.append(f"  error: {tool_run.get('error')}")
+        return "\n".join(lines)
+
+    def _resolve_benchmark_run_dir(self) -> Path:
+        """Return the selected benchmark run directory or the latest available one."""
+        explicit_run_dir = self.benchmark_run_dir_var.get().strip()
+        if explicit_run_dir:
+            run_dir = Path(explicit_run_dir).expanduser()
+            if not run_dir.exists():
+                raise ValueError("The selected benchmark run directory does not exist.")
+            return run_dir
+
+        output_root = Path(
+            self.benchmark_output_dir_var.get().strip() or str(self.benchmark_results_root)
+        ).expanduser()
+        run_dirs = sorted(path for path in output_root.glob("run_*") if path.is_dir())
+        if not run_dirs:
+            raise ValueError("Run a benchmark first, or enter an existing run directory.")
+        return run_dirs[-1]
+
+    def _set_benchmark_controls_enabled(self, enabled: bool) -> None:
+        """Enable or disable benchmark action controls."""
+        state = "normal" if enabled else "disabled"
+        for button in self.benchmark_action_buttons:
+            button.configure(state=state)
+        self.benchmark_skip_missing_switch.configure(state=state)
+
+    def _append_benchmark_log(self, message: str) -> None:
+        """Append a timestamped entry to the benchmark activity pane."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.benchmark_log_box.configure(state="normal")
+        self.benchmark_log_box.insert("end", f"[{timestamp}] {message}\n")
+        self.benchmark_log_box.see("end")
+        self.benchmark_log_box.configure(state="disabled")
 
     def _set_textbox_content(self, textbox: ctk.CTkTextbox, content: str) -> None:
         """Replace the full contents of a readonly textbox."""

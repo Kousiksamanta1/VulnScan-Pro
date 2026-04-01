@@ -12,6 +12,7 @@ import warnings
 from collections.abc import Iterable as IterableABC
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterable
@@ -171,6 +172,72 @@ class ScannerEngine:
         re.compile(r"odbc sql server driver", re.IGNORECASE),
         re.compile(r"ora-\d{4,5}", re.IGNORECASE),
     ]
+    XSS_PAYLOADS = (
+        {
+            "name": "script-tag-breakout",
+            "payload": '"><script>window.__vulnscan_xss__=1</script>',
+            "contexts": {"attribute", "html_tag", "html_text"},
+        },
+        {
+            "name": "svg-onload-breakout",
+            "payload": "'><svg/onload=window.__vulnscan_xss__=1>",
+            "contexts": {"attribute", "html_tag", "html_text"},
+        },
+        {
+            "name": "image-onerror-injection",
+            "payload": "<img src=x onerror=window.__vulnscan_xss__=1>",
+            "contexts": {"html_text", "html_tag"},
+        },
+        {
+            "name": "script-block-breakout",
+            "payload": "</script><script>window.__vulnscan_xss__=1</script>",
+            "contexts": {"script_block", "html_text"},
+        },
+        {
+            "name": "autofocus-onfocus-breakout",
+            "payload": '" autofocus onfocus=window.__vulnscan_xss__=1 x="',
+            "contexts": {"attribute", "html_tag"},
+        },
+    )
+    SQLI_ERROR_PAYLOADS = (
+        {"name": "single-quote", "payload": "'"},
+        {"name": "double-quote", "payload": '"'},
+        {"name": "quote-burst", "payload": '\'\"`'},
+        {"name": "parenthesis-break", "payload": "')"},
+    )
+    SQLI_BOOLEAN_PAYLOADS = (
+        {
+            "name": "quoted-boolean",
+            "true_payload": "' OR '1'='1' -- ",
+            "false_payload": "' AND '1'='2' -- ",
+        },
+        {
+            "name": "numeric-boolean",
+            "true_payload": "1 OR 1=1 -- ",
+            "false_payload": "1 AND 1=2 -- ",
+        },
+    )
+    SQLI_TIME_PAYLOADS = (
+        {
+            "name": "mysql-sleep",
+            "payload": "' AND (SELECT 1 FROM (SELECT(SLEEP(5)))v) -- ",
+            "delay": 5.0,
+        },
+        {
+            "name": "numeric-mysql-sleep",
+            "payload": "1 AND SLEEP(5) -- ",
+            "delay": 5.0,
+        },
+        {
+            "name": "mssql-waitfor",
+            "payload": "1; WAITFOR DELAY '0:0:5' --",
+            "delay": 5.0,
+        },
+    )
+    BOOLEAN_SQLI_MATCH_THRESHOLD = 0.92
+    BOOLEAN_SQLI_DIFFERENCE_THRESHOLD = 0.78
+    BOOLEAN_SQLI_CROSS_DIFF_THRESHOLD = 0.88
+    TIME_SQLI_DELAY_THRESHOLD = 3.0
     RISKY_PORTS = {
         21: "medium",
         23: "high",
@@ -499,8 +566,22 @@ class ScannerEngine:
             "cookies": [],
             "forms": [],
             "parameters": [],
-            "xss": {"vulnerable": False, "evidence": "", "tested": []},
-            "sqli": {"vulnerable": False, "evidence": "", "tested": []},
+            "xss": {
+                "vulnerable": False,
+                "evidence": "",
+                "tested": [],
+                "parameter": "",
+                "payload": "",
+                "context": "",
+            },
+            "sqli": {
+                "vulnerable": False,
+                "evidence": "",
+                "tested": [],
+                "parameter": "",
+                "payload": "",
+                "technique": "",
+            },
             "findings": [],
         }
 
@@ -518,11 +599,13 @@ class ScannerEngine:
         session.verify = False
 
         try:
+            baseline_started = time.perf_counter()
             baseline_response = session.get(
                 normalized_url,
                 timeout=self.timeout + 4.0,
                 allow_redirects=True,
             )
+            baseline_elapsed = time.perf_counter() - baseline_started
             baseline_text = baseline_response.text or ""
             result["final_url"] = baseline_response.url
             result["server"] = baseline_response.headers.get("Server", "")
@@ -552,35 +635,40 @@ class ScannerEngine:
                 result["parameters"],
             )
 
-            xss_payload = "<script>vulnscan_xss_probe</script>"
             xss_result = self._run_xss_checks(
                 session,
                 parameter_targets,
-                xss_payload,
                 baseline_text,
             )
             result["xss"] = xss_result
             if xss_result["vulnerable"]:
                 result["findings"].append(
                     {
-                        "name": "Potential reflected XSS",
+                        "name": (
+                            f"Potential reflected XSS in "
+                            f"'{xss_result.get('parameter', 'unknown')}'"
+                        ),
                         "severity": "high",
                         "evidence": xss_result["evidence"],
                     }
                 )
 
-            sqli_payload = "'\"`"
             sqli_result = self._run_sqli_checks(
                 session,
                 parameter_targets,
-                sqli_payload,
+                baseline_response,
                 baseline_text,
+                baseline_elapsed,
             )
             result["sqli"] = sqli_result
             if sqli_result["vulnerable"]:
+                technique = sqli_result.get("technique", "heuristic").replace("-", " ")
                 result["findings"].append(
                     {
-                        "name": "Potential SQL injection indicator",
+                        "name": (
+                            f"Potential SQL injection ({technique}) "
+                            f"in '{sqli_result.get('parameter', 'unknown')}'"
+                        ),
                         "severity": "high",
                         "evidence": sqli_result["evidence"],
                     }
@@ -743,73 +831,489 @@ class ScannerEngine:
         self,
         session: Any,
         targets: list[dict[str, str]],
-        payload: str,
         baseline_text: str,
     ) -> dict[str, Any]:
-        """Probe a small set of parameters for simple reflected XSS indicators."""
+        """Probe parameters with context-aware reflected XSS payloads."""
         tested: list[str] = []
         for target in targets:
             if self._cancelled():
                 break
 
-            probe_url = self._inject_payload(target["url"], payload, target["parameter"])
-            tested.append(f"{target['parameter']} @ {target['url']}")
-            try:
-                response = session.get(
-                    probe_url,
-                    timeout=self.timeout + 3.0,
-                    allow_redirects=True,
-                )
-                if payload in response.text and payload not in baseline_text:
-                    return {
-                        "vulnerable": True,
-                        "evidence": f"Payload reflected via parameter '{target['parameter']}' on {response.url}",
-                        "tested": tested,
-                    }
-            except RequestException:
-                continue
+            for payload_def in self.XSS_PAYLOADS:
+                if self._cancelled():
+                    break
 
-        return {"vulnerable": False, "evidence": "", "tested": tested}
+                probe_url = self._inject_payload(
+                    target["url"],
+                    payload_def["payload"],
+                    target["parameter"],
+                )
+                tested.append(
+                    f"{target['parameter']} @ {target['url']} "
+                    f"[{payload_def['name']}]"
+                )
+                response, _, _ = self._issue_probe(session, probe_url)
+                if response is None:
+                    continue
+
+                reflection = self._analyze_xss_reflection(
+                    response.text or "",
+                    baseline_text,
+                    payload_def,
+                )
+                if reflection is None:
+                    continue
+
+                return {
+                    "vulnerable": True,
+                    "evidence": (
+                        f"Reflected XSS-style payload '{payload_def['name']}' was "
+                        f"returned in {reflection['label']} for parameter "
+                        f"'{target['parameter']}' at {response.url}. "
+                        f"Snippet: {reflection['snippet']}"
+                    ),
+                    "tested": tested,
+                    "parameter": target["parameter"],
+                    "payload": payload_def["payload"],
+                    "context": reflection["name"],
+                }
+
+        return {
+            "vulnerable": False,
+            "evidence": "",
+            "tested": tested,
+            "parameter": "",
+            "payload": "",
+            "context": "",
+        }
 
     def _run_sqli_checks(
         self,
         session: Any,
         targets: list[dict[str, str]],
-        payload: str,
+        baseline_response: Any,
         baseline_text: str,
+        baseline_elapsed: float,
     ) -> dict[str, Any]:
-        """Probe parameters for SQL error indicators after quote injection."""
+        """Probe parameters with error, boolean, and time-based SQLi heuristics."""
         baseline_errors = set(self._extract_sqli_errors(baseline_text))
+        baseline_profile = self._build_response_profile(baseline_response, baseline_text)
         tested: list[str] = []
 
         for target in targets:
             if self._cancelled():
                 break
 
-            probe_url = self._inject_payload(target["url"], payload, target["parameter"])
-            tested.append(f"{target['parameter']} @ {target['url']}")
-            try:
-                response = session.get(
-                    probe_url,
-                    timeout=self.timeout + 3.0,
-                    allow_redirects=True,
-                )
-            except RequestException:
+            control_timings = [baseline_elapsed] if baseline_elapsed > 0 else []
+
+            error_result = self._check_error_based_sqli(
+                session,
+                target,
+                baseline_errors,
+                tested,
+                control_timings,
+            )
+            if error_result is not None:
+                return error_result
+
+            boolean_result = self._check_boolean_based_sqli(
+                session,
+                target,
+                baseline_profile,
+                tested,
+                control_timings,
+            )
+            if boolean_result is not None:
+                return boolean_result
+
+            time_result = self._check_time_based_sqli(
+                session,
+                target,
+                baseline_profile,
+                tested,
+                control_timings,
+            )
+            if time_result is not None:
+                return time_result
+
+        return {
+            "vulnerable": False,
+            "evidence": "",
+            "tested": tested,
+            "parameter": "",
+            "payload": "",
+            "technique": "",
+        }
+
+    def _check_error_based_sqli(
+        self,
+        session: Any,
+        target: dict[str, str],
+        baseline_errors: set[str],
+        tested: list[str],
+        control_timings: list[float],
+    ) -> dict[str, Any] | None:
+        """Detect SQLi by provoking database error messages."""
+        for payload_def in self.SQLI_ERROR_PAYLOADS:
+            probe_url = self._inject_payload(
+                target["url"],
+                payload_def["payload"],
+                target["parameter"],
+            )
+            tested.append(
+                f"{target['parameter']} @ {target['url']} "
+                f"[error-based:{payload_def['name']}]"
+            )
+            response, elapsed, _ = self._issue_probe(session, probe_url)
+            if response is None:
                 continue
 
-            current_errors = set(self._extract_sqli_errors(response.text))
+            control_timings.append(elapsed)
+            current_errors = set(self._extract_sqli_errors(response.text or ""))
             new_errors = sorted(current_errors - baseline_errors)
-            if new_errors:
+            if not new_errors:
+                continue
+
+            return {
+                "vulnerable": True,
+                "evidence": (
+                    f"Database-style error patterns appeared after sending "
+                    f"'{payload_def['name']}' to '{target['parameter']}': "
+                    f"{', '.join(new_errors)}"
+                ),
+                "tested": tested,
+                "parameter": target["parameter"],
+                "payload": payload_def["payload"],
+                "technique": "error-based",
+            }
+
+        return None
+
+    def _check_boolean_based_sqli(
+        self,
+        session: Any,
+        target: dict[str, str],
+        baseline_profile: dict[str, Any],
+        tested: list[str],
+        control_timings: list[float],
+    ) -> dict[str, Any] | None:
+        """Detect SQLi by comparing true/false conditional responses."""
+        for payload_def in self.SQLI_BOOLEAN_PAYLOADS:
+            true_url = self._inject_payload(
+                target["url"],
+                payload_def["true_payload"],
+                target["parameter"],
+            )
+            tested.append(
+                f"{target['parameter']} @ {target['url']} "
+                f"[boolean-based:{payload_def['name']}:true]"
+            )
+            true_response, true_elapsed, _ = self._issue_probe(session, true_url)
+            if true_response is None:
+                continue
+
+            false_url = self._inject_payload(
+                target["url"],
+                payload_def["false_payload"],
+                target["parameter"],
+            )
+            tested.append(
+                f"{target['parameter']} @ {target['url']} "
+                f"[boolean-based:{payload_def['name']}:false]"
+            )
+            false_response, false_elapsed, _ = self._issue_probe(session, false_url)
+            if false_response is None:
+                continue
+
+            control_timings.extend([true_elapsed, false_elapsed])
+            analysis = self._assess_boolean_sqli(
+                baseline_profile,
+                true_response,
+                false_response,
+                payload_def["true_payload"],
+                payload_def["false_payload"],
+            )
+            if analysis is None:
+                continue
+
+            return {
+                "vulnerable": True,
+                "evidence": (
+                    f"Boolean-based SQLi behavior detected on "
+                    f"'{target['parameter']}': the true condition remained "
+                    f"baseline-like ({analysis['true_similarity']:.2f}) while "
+                    f"the false condition diverged "
+                    f"({analysis['false_similarity']:.2f})."
+                ),
+                "tested": tested,
+                "parameter": target["parameter"],
+                "payload": payload_def["true_payload"],
+                "technique": "boolean-based",
+            }
+
+        return None
+
+    def _check_time_based_sqli(
+        self,
+        session: Any,
+        target: dict[str, str],
+        baseline_profile: dict[str, Any],
+        tested: list[str],
+        control_timings: list[float],
+    ) -> dict[str, Any] | None:
+        """Detect SQLi by looking for controlled response delays."""
+        reference_elapsed = min(
+            [value for value in control_timings if value > 0],
+            default=0.0,
+        )
+        for payload_def in self.SQLI_TIME_PAYLOADS:
+            probe_url = self._inject_payload(
+                target["url"],
+                payload_def["payload"],
+                target["parameter"],
+            )
+            tested.append(
+                f"{target['parameter']} @ {target['url']} "
+                f"[time-based:{payload_def['name']}]"
+            )
+            timeout_window = max(
+                self.timeout + payload_def["delay"] + 3.0,
+                reference_elapsed + payload_def["delay"] + 2.0,
+            )
+            response, elapsed, _ = self._issue_probe(
+                session,
+                probe_url,
+                timeout=timeout_window,
+            )
+            if response is None:
+                continue
+
+            delayed_by = elapsed - reference_elapsed
+            response_profile = self._build_response_profile(
+                response,
+                response.text or "",
+                (payload_def["payload"],),
+            )
+            similarity = self._body_similarity(
+                baseline_profile["body"],
+                response_profile["body"],
+            )
+            if (
+                delayed_by >= max(self.TIME_SQLI_DELAY_THRESHOLD, payload_def["delay"] - 1.0)
+                and (
+                    response_profile["status_code"] == baseline_profile["status_code"]
+                    or similarity >= self.BOOLEAN_SQLI_DIFFERENCE_THRESHOLD
+                )
+            ):
                 return {
                     "vulnerable": True,
                     "evidence": (
-                        f"Database-style error strings appeared after probing "
-                        f"'{target['parameter']}': {', '.join(new_errors)}"
+                        f"Time-based SQLi behavior detected on "
+                        f"'{target['parameter']}': payload "
+                        f"'{payload_def['name']}' delayed the response by "
+                        f"{delayed_by:.2f}s over the baseline probe."
                     ),
                     "tested": tested,
+                    "parameter": target["parameter"],
+                    "payload": payload_def["payload"],
+                    "technique": "time-based",
                 }
 
-        return {"vulnerable": False, "evidence": "", "tested": tested}
+            control_timings.append(elapsed)
+
+        return None
+
+    def _issue_probe(
+        self,
+        session: Any,
+        probe_url: str,
+        timeout: float | None = None,
+    ) -> tuple[Any | None, float, RequestException | None]:
+        """Send a single probe request and capture its duration."""
+        started = time.perf_counter()
+        try:
+            response = session.get(
+                probe_url,
+                timeout=timeout or (self.timeout + 3.0),
+                allow_redirects=True,
+            )
+            return response, time.perf_counter() - started, None
+        except RequestException as exc:
+            return None, time.perf_counter() - started, exc
+
+    def _analyze_xss_reflection(
+        self,
+        response_text: str,
+        baseline_text: str,
+        payload_def: dict[str, Any],
+    ) -> dict[str, str] | None:
+        """Return context metadata when an injected payload is reflected unsafely."""
+        payload = payload_def["payload"]
+        if response_text.count(payload) <= baseline_text.count(payload):
+            return None
+
+        start = 0
+        while True:
+            index = response_text.find(payload, start)
+            if index == -1:
+                return None
+
+            context = self._classify_html_context(response_text, index, len(payload))
+            if context["name"] in payload_def["contexts"]:
+                return context
+            start = index + len(payload)
+
+    def _classify_html_context(
+        self,
+        response_text: str,
+        index: int,
+        payload_length: int,
+    ) -> dict[str, str]:
+        """Classify the HTML context around a reflected payload."""
+        lower_text = response_text.lower()
+        last_lt = response_text.rfind("<", 0, index)
+        last_gt = response_text.rfind(">", 0, index)
+        next_gt = response_text.find(">", index)
+
+        if last_lt > last_gt and next_gt != -1:
+            tag_snippet = response_text[last_lt : min(len(response_text), next_gt + 1)]
+            tag_prefix = response_text[last_lt:index]
+            if re.search(r"[\w:-]+\s*=\s*([\"'][^\"']*)?$", tag_prefix):
+                return {
+                    "name": "attribute",
+                    "label": "an HTML attribute",
+                    "snippet": self._compact_snippet(tag_snippet),
+                }
+            return {
+                "name": "html_tag",
+                "label": "HTML tag markup",
+                "snippet": self._compact_snippet(tag_snippet),
+            }
+
+        last_script_open = lower_text.rfind("<script", 0, index)
+        last_script_close = lower_text.rfind("</script", 0, index)
+        if last_script_open > last_script_close:
+            next_script_close = lower_text.find("</script", index + payload_length)
+            if next_script_close != -1:
+                snippet = response_text[
+                    last_script_open : min(len(response_text), next_script_close + 9)
+                ]
+            else:
+                snippet = response_text[
+                    max(0, index - 80) : min(len(response_text), index + payload_length + 80)
+                ]
+            return {
+                "name": "script_block",
+                "label": "a script block",
+                "snippet": self._compact_snippet(snippet),
+            }
+
+        snippet = response_text[
+            max(0, index - 80) : min(len(response_text), index + payload_length + 80)
+        ]
+        return {
+            "name": "html_text",
+            "label": "HTML text",
+            "snippet": self._compact_snippet(snippet),
+        }
+
+    def _assess_boolean_sqli(
+        self,
+        baseline_profile: dict[str, Any],
+        true_response: Any,
+        false_response: Any,
+        true_payload: str,
+        false_payload: str,
+    ) -> dict[str, float] | None:
+        """Score whether true/false SQLi probes behave like a conditional split."""
+        strip_tokens = (true_payload, false_payload)
+        true_profile = self._build_response_profile(
+            true_response,
+            true_response.text or "",
+            strip_tokens,
+        )
+        false_profile = self._build_response_profile(
+            false_response,
+            false_response.text or "",
+            strip_tokens,
+        )
+        true_similarity = self._body_similarity(
+            baseline_profile["body"],
+            true_profile["body"],
+        )
+        false_similarity = self._body_similarity(
+            baseline_profile["body"],
+            false_profile["body"],
+        )
+        true_false_similarity = self._body_similarity(
+            true_profile["body"],
+            false_profile["body"],
+        )
+        length_tolerance = max(48, int(max(1, baseline_profile["length"]) * 0.10))
+        true_matches_baseline = (
+            true_profile["status_code"] == baseline_profile["status_code"]
+            and (
+                true_similarity >= self.BOOLEAN_SQLI_MATCH_THRESHOLD
+                or abs(true_profile["length"] - baseline_profile["length"]) <= length_tolerance
+            )
+        )
+        false_diverges = (
+            false_profile["status_code"] != baseline_profile["status_code"]
+            or false_similarity <= self.BOOLEAN_SQLI_DIFFERENCE_THRESHOLD
+            or abs(false_profile["length"] - baseline_profile["length"]) > length_tolerance
+        )
+        if (
+            true_matches_baseline
+            and false_diverges
+            and true_false_similarity <= self.BOOLEAN_SQLI_CROSS_DIFF_THRESHOLD
+        ):
+            return {
+                "true_similarity": true_similarity,
+                "false_similarity": false_similarity,
+            }
+        return None
+
+    def _build_response_profile(
+        self,
+        response: Any,
+        response_text: str,
+        strip_tokens: Iterable[str] = (),
+    ) -> dict[str, Any]:
+        """Reduce a response to a compact structure suitable for comparison."""
+        normalized_body = self._normalize_response_body(response_text, strip_tokens)
+        return {
+            "status_code": int(getattr(response, "status_code", 0) or 0),
+            "body": normalized_body,
+            "length": len(normalized_body),
+        }
+
+    def _normalize_response_body(
+        self,
+        response_text: str,
+        strip_tokens: Iterable[str] = (),
+    ) -> str:
+        """Normalize body content before running body similarity checks."""
+        normalized = response_text or ""
+        for token in strip_tokens:
+            if token:
+                normalized = normalized.replace(token, " ")
+        normalized = re.sub(r"\s+", " ", normalized).strip().lower()
+        return normalized[:6000]
+
+    def _body_similarity(self, left: str, right: str) -> float:
+        """Return a stable similarity ratio for two normalized response bodies."""
+        if not left and not right:
+            return 1.0
+        if not left or not right:
+            return 0.0
+        return SequenceMatcher(a=left, b=right).ratio()
+
+    def _compact_snippet(self, text: str, limit: int = 180) -> str:
+        """Collapse whitespace and trim long evidence snippets."""
+        snippet = re.sub(r"\s+", " ", text).strip()
+        if len(snippet) <= limit:
+            return snippet
+        return f"{snippet[: limit - 3]}..."
 
     def _inspect_security_headers(
         self,

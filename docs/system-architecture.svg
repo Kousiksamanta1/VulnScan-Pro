@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">VulnScan Pro System Architecture</title>
+  <desc id="desc">Architecture diagram showing the user, desktop application, scanning engine, persistence and reporting modules, and external systems.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#08111d" />
+      <stop offset="55%" stop-color="#0b1728" />
+      <stop offset="100%" stop-color="#132033" />
+    </linearGradient>
+    <linearGradient id="panelFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f1b2f" stop-opacity="0.92" />
+      <stop offset="100%" stop-color="#0b1424" stop-opacity="0.92" />
+    </linearGradient>
+    <linearGradient id="nodeBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#12304d" />
+      <stop offset="100%" stop-color="#0e2339" />
+    </linearGradient>
+    <linearGradient id="nodeTeal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10383a" />
+      <stop offset="100%" stop-color="#0d262b" />
+    </linearGradient>
+    <linearGradient id="nodeAmber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b2c12" />
+      <stop offset="100%" stop-color="#241b0b" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#02060c" flood-opacity="0.35" />
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#7dd3fc" />
+    </marker>
+    <style>
+      .title { font: 700 34px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 16px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #9fb2c9; }
+      .panel { fill: url(#panelFill); stroke: #21405f; stroke-width: 1.5; rx: 28; filter: url(#shadow); }
+      .panel-title { font: 700 18px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #cfe4ff; letter-spacing: 0.4px; }
+      .panel-note { font: 400 12px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #7f94ad; }
+      .node { stroke: #32547a; stroke-width: 1.2; rx: 18; filter: url(#shadow); }
+      .node-blue { fill: url(#nodeBlue); }
+      .node-teal { fill: url(#nodeTeal); }
+      .node-amber { fill: url(#nodeAmber); }
+      .node-title { font: 700 16px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #f8fafc; }
+      .node-sub { font: 400 12px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #9dc0df; }
+      .arrow { fill: none; stroke: #7dd3fc; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); opacity: 0.92; }
+      .arrow-soft { fill: none; stroke: #38bdf8; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); opacity: 0.75; }
+      .label { font: 600 12px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #7dd3fc; }
+      .footer { font: 400 13px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #8ea7c4; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="980" fill="url(#bg)" />
+  <text x="70" y="78" class="title">VulnScan Pro System Architecture</text>
+
+  <rect x="55" y="150" width="170" height="680" class="panel" />
+  <rect x="255" y="150" width="320" height="680" class="panel" />
+  <rect x="605" y="150" width="400" height="680" class="panel" />
+  <rect x="1035" y="150" width="285" height="680" class="panel" />
+  <rect x="1350" y="150" width="195" height="680" class="panel" />
+
+  <text x="85" y="190" class="panel-title">User</text>
+  <text x="85" y="210" class="panel-note">Operator launching scans</text>
+
+  <text x="285" y="190" class="panel-title">Desktop Application</text>
+  <text x="285" y="210" class="panel-note">main.py and scanner_app.py</text>
+
+  <text x="635" y="190" class="panel-title">Scanning Engine</text>
+  <text x="635" y="210" class="panel-note">scanner_engine.py</text>
+
+  <text x="1065" y="190" class="panel-title">Persistence and Reporting</text>
+  <text x="1065" y="210" class="panel-note">scanner_storage.py and scanner_reporting.py</text>
+
+  <text x="1380" y="190" class="panel-title">External Systems</text>
+  <text x="1380" y="210" class="panel-note">Network and filesystem</text>
+
+  <rect x="82" y="330" width="116" height="92" class="node node-teal" />
+  <text x="140" y="367" text-anchor="middle" class="node-title">User</text>
+  <text x="140" y="389" text-anchor="middle" class="node-sub">Provides target</text>
+  <text x="140" y="406" text-anchor="middle" class="node-sub">starts scan</text>
+
+  <rect x="300" y="230" width="230" height="72" class="node node-blue" />
+  <text x="415" y="268" text-anchor="middle" class="node-title">main.py</text>
+  <text x="415" y="289" text-anchor="middle" class="node-sub">Application entry point</text>
+
+  <rect x="300" y="340" width="230" height="96" class="node node-blue" />
+  <text x="415" y="378" text-anchor="middle" class="node-title">ScannerApp</text>
+  <text x="415" y="400" text-anchor="middle" class="node-sub">UI controls, tabs, metrics,</text>
+  <text x="415" y="418" text-anchor="middle" class="node-sub">history, and export actions</text>
+
+  <rect x="300" y="500" width="230" height="84" class="node node-blue" />
+  <text x="415" y="536" text-anchor="middle" class="node-title">Background Scan Thread</text>
+  <text x="415" y="557" text-anchor="middle" class="node-sub">Runs engine without</text>
+  <text x="415" y="575" text-anchor="middle" class="node-sub">blocking Tk main loop</text>
+
+  <rect x="300" y="645" width="230" height="84" class="node node-blue" />
+  <text x="415" y="680" text-anchor="middle" class="node-title">message_queue</text>
+  <text x="415" y="702" text-anchor="middle" class="node-sub">queue.Queue carrying</text>
+  <text x="415" y="720" text-anchor="middle" class="node-sub">status and result events</text>
+
+  <rect x="640" y="220" width="330" height="78" class="node node-teal" />
+  <text x="805" y="260" text-anchor="middle" class="node-title">ScannerEngine</text>
+  <text x="805" y="282" text-anchor="middle" class="node-sub">Coordinates all scan phases</text>
+
+  <rect x="640" y="332" width="330" height="92" class="node node-teal" />
+  <text x="805" y="369" text-anchor="middle" class="node-title">Target Validation and Parsing</text>
+  <text x="805" y="391" text-anchor="middle" class="node-sub">prepare_target and parse_ports</text>
+  <text x="805" y="409" text-anchor="middle" class="node-sub">normalize host, URL, and ports</text>
+
+  <rect x="640" y="455" width="330" height="72" class="node node-teal" />
+  <text x="805" y="494" text-anchor="middle" class="node-title">ThreadPoolExecutor</text>
+  <text x="805" y="515" text-anchor="middle" class="node-sub">Runs DNS, TLS, web, and per-port tasks</text>
+
+  <rect x="640" y="575" width="150" height="110" class="node node-teal" />
+  <text x="715" y="612" text-anchor="middle" class="node-title">DNS</text>
+  <text x="715" y="634" text-anchor="middle" class="node-sub">A, AAAA, MX, NS,</text>
+  <text x="715" y="652" text-anchor="middle" class="node-sub">TXT, SPF, DMARC</text>
+  <text x="715" y="670" text-anchor="middle" class="node-sub">and SOA</text>
+
+  <rect x="820" y="575" width="150" height="110" class="node node-teal" />
+  <text x="895" y="612" text-anchor="middle" class="node-title">Port Scan</text>
+  <text x="895" y="634" text-anchor="middle" class="node-sub">TCP connect scan,</text>
+  <text x="895" y="652" text-anchor="middle" class="node-sub">banner probe,</text>
+  <text x="895" y="670" text-anchor="middle" class="node-sub">service severity</text>
+
+  <rect x="640" y="715" width="150" height="92" class="node node-teal" />
+  <text x="715" y="751" text-anchor="middle" class="node-title">TLS Analysis</text>
+  <text x="715" y="773" text-anchor="middle" class="node-sub">Certificate metadata,</text>
+  <text x="715" y="791" text-anchor="middle" class="node-sub">expiry, weak protocols</text>
+
+  <rect x="820" y="715" width="150" height="92" class="node node-teal" />
+  <text x="895" y="751" text-anchor="middle" class="node-title">Web Checks</text>
+  <text x="895" y="773" text-anchor="middle" class="node-sub">Headers, cookies, forms,</text>
+  <text x="895" y="791" text-anchor="middle" class="node-sub">XSS and SQLi indicators</text>
+
+  <rect x="1072" y="230" width="210" height="82" class="node node-amber" />
+  <text x="1177" y="268" text-anchor="middle" class="node-title">scanner_storage</text>
+  <text x="1177" y="290" text-anchor="middle" class="node-sub">Settings, history, snapshots,</text>
+  <text x="1177" y="308" text-anchor="middle" class="node-sub">and scan comparison</text>
+
+  <rect x="1072" y="355" width="210" height="72" class="node node-amber" />
+  <text x="1177" y="394" text-anchor="middle" class="node-title">settings.json</text>
+  <text x="1177" y="415" text-anchor="middle" class="node-sub">Saved UI defaults</text>
+
+  <rect x="1072" y="470" width="210" height="72" class="node node-amber" />
+  <text x="1177" y="509" text-anchor="middle" class="node-title">scan_history.json</text>
+  <text x="1177" y="530" text-anchor="middle" class="node-sub">Stored scan snapshots</text>
+
+  <rect x="1072" y="602" width="210" height="82" class="node node-amber" />
+  <text x="1177" y="640" text-anchor="middle" class="node-title">scanner_reporting</text>
+  <text x="1177" y="662" text-anchor="middle" class="node-sub">JSON, CSV, HTML,</text>
+  <text x="1177" y="680" text-anchor="middle" class="node-sub">and PDF export</text>
+
+  <rect x="1072" y="725" width="210" height="72" class="node node-amber" />
+  <text x="1177" y="764" text-anchor="middle" class="node-title">Report Files</text>
+  <text x="1177" y="785" text-anchor="middle" class="node-sub">User-selected output path</text>
+
+  <rect x="1382" y="230" width="130" height="72" class="node node-blue" />
+  <text x="1447" y="269" text-anchor="middle" class="node-title">DNS Infra</text>
+  <text x="1447" y="290" text-anchor="middle" class="node-sub">Resolvers</text>
+
+  <rect x="1382" y="350" width="130" height="88" class="node node-blue" />
+  <text x="1447" y="387" text-anchor="middle" class="node-title">Target Host</text>
+  <text x="1447" y="409" text-anchor="middle" class="node-sub">Ports and</text>
+  <text x="1447" y="427" text-anchor="middle" class="node-sub">banners</text>
+
+  <rect x="1382" y="490" width="130" height="88" class="node node-blue" />
+  <text x="1447" y="527" text-anchor="middle" class="node-title">HTTP(S)</text>
+  <text x="1447" y="549" text-anchor="middle" class="node-sub">Web posture</text>
+  <text x="1447" y="567" text-anchor="middle" class="node-sub">inspection</text>
+
+  <rect x="1382" y="630" width="130" height="88" class="node node-blue" />
+  <text x="1447" y="667" text-anchor="middle" class="node-title">TLS Endpoints</text>
+  <text x="1447" y="689" text-anchor="middle" class="node-sub">Handshake and</text>
+  <text x="1447" y="707" text-anchor="middle" class="node-sub">certificate data</text>
+
+  <rect x="1382" y="770" width="130" height="72" class="node node-blue" />
+  <text x="1447" y="809" text-anchor="middle" class="node-title">Filesystem</text>
+  <text x="1447" y="830" text-anchor="middle" class="node-sub">App data and reports</text>
+
+  <path d="M198 376 L300 388" class="arrow" />
+  <path d="M415 302 L415 340" class="arrow" />
+  <path d="M415 436 L415 500" class="arrow" />
+  <path d="M530 542 L640 259" class="arrow" />
+  <path d="M805 298 L805 332" class="arrow" />
+  <path d="M805 424 L805 455" class="arrow" />
+  <path d="M805 527 L805 555" class="arrow-soft" />
+  <path d="M805 555 L715 575" class="arrow-soft" />
+  <path d="M805 555 L895 575" class="arrow-soft" />
+  <path d="M805 555 L715 715" class="arrow-soft" />
+  <path d="M805 555 L895 715" class="arrow-soft" />
+
+  <path d="M970 259 L1040 271 L1040 271 L1072 271" class="arrow" />
+  <path d="M530 392 L1072 271" class="arrow-soft" />
+  <path d="M530 392 L1072 643" class="arrow-soft" />
+  <path d="M1282 271 L1382 266" class="arrow-soft" />
+  <path d="M895 630 L1382 394" class="arrow-soft" />
+  <path d="M895 761 L1382 534" class="arrow-soft" />
+  <path d="M715 761 L1382 674" class="arrow-soft" />
+
+  <path d="M640 259 L560 259 L560 687 L530 687" class="arrow" />
+  <path d="M300 687 L250 687 L250 388 L300 388" class="arrow" />
+
+  <path d="M1177 312 L1177 355" class="arrow" />
+  <path d="M1177 312 L1177 470" class="arrow-soft" />
+  <path d="M1177 684 L1177 725" class="arrow" />
+  <path d="M1282 391 L1382 806" class="arrow-soft" />
+  <path d="M1282 506 L1382 806" class="arrow-soft" />
+  <path d="M1282 761 L1382 806" class="arrow" />
+
+  <text x="565" y="642" class="label">live events</text>
+  <text x="256" y="515" class="label">UI updates</text>
+  <text x="1015" y="388" class="label">load and save</text>
+  <text x="1012" y="628" class="label">export</text>
+
+</svg>

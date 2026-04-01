@@ -1,0 +1,119 @@
+{
+  "metadata": {
+    "profile_name": "local-controlled-lab",
+    "profile_version": "2026.1",
+    "description": "Controlled benchmark targets for repeatable dissertation evaluation.",
+    "tool_capabilities": {
+      "vulnscan": ["port", "web", "tls"],
+      "nmap": ["port"],
+      "zap": ["web"]
+    }
+  },
+  "targets": [
+    {
+      "id": "reflected-xss-lab",
+      "name": "Controlled reflected XSS lab",
+      "host": "localhost",
+      "url": "http://localhost:8081/?q=hello",
+      "port_spec": "8081",
+      "expected_findings": [
+        "port:8081",
+        "web:xss",
+        "web:missing-content-security-policy",
+        "web:missing-strict-transport-security",
+        "web:missing-x-frame-options",
+        "web:missing-x-content-type-options",
+        "web:missing-referrer-policy",
+        "web:missing-permissions-policy",
+        "web:server-header-exposed"
+      ],
+      "expected_findings_by_tool": {
+        "nmap": [
+          "port:8081"
+        ],
+        "zap": [
+          "web:missing-content-security-policy",
+          "web:missing-x-frame-options",
+          "web:missing-x-content-type-options"
+        ]
+      }
+    },
+    {
+      "id": "sqli-lab",
+      "name": "Controlled SQL injection heuristic lab",
+      "host": "localhost",
+      "url": "http://localhost:8082/items?id=1",
+      "port_spec": "8082",
+      "expected_findings": [
+        "port:8082",
+        "web:sqli",
+        "web:missing-content-security-policy",
+        "web:missing-strict-transport-security",
+        "web:missing-x-frame-options",
+        "web:missing-x-content-type-options",
+        "web:missing-referrer-policy",
+        "web:missing-permissions-policy",
+        "web:server-header-exposed"
+      ],
+      "expected_findings_by_tool": {
+        "nmap": [
+          "port:8082"
+        ],
+        "zap": [
+          "web:missing-content-security-policy",
+          "web:missing-x-frame-options",
+          "web:missing-x-content-type-options"
+        ]
+      }
+    },
+    {
+      "id": "header-cookie-lab",
+      "name": "Header and cookie posture lab",
+      "host": "localhost",
+      "url": "http://localhost:8083/",
+      "port_spec": "8083",
+      "expected_findings": [
+        "port:8083",
+        "web:missing-content-security-policy",
+        "web:missing-strict-transport-security",
+        "web:missing-x-frame-options",
+        "web:missing-x-content-type-options",
+        "web:missing-referrer-policy",
+        "web:missing-permissions-policy",
+        "web:server-header-exposed",
+        "web:cookie-missing-secure",
+        "web:cookie-missing-httponly",
+        "web:cookie-missing-samesite"
+      ],
+      "expected_findings_by_tool": {
+        "nmap": [
+          "port:8083"
+        ],
+        "zap": [
+          "web:missing-content-security-policy",
+          "web:missing-x-frame-options",
+          "web:missing-x-content-type-options",
+          "web:cookie-missing-secure",
+          "web:cookie-missing-httponly",
+          "web:cookie-missing-samesite"
+        ]
+      }
+    },
+    {
+      "id": "tcp-banner-lab",
+      "name": "TCP banner lab",
+      "host": "localhost",
+      "url": "",
+      "port_spec": "2525",
+      "expected_findings": [
+        "port:2525"
+      ],
+      "expected_findings_by_tool": {
+        "nmap": [
+          "port:2525"
+        ],
+        "zap": []
+      }
+    }
+  ]
+}

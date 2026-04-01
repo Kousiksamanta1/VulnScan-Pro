@@ -1,0 +1,249 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="2100" viewBox="0 0 1500 2100" role="img" aria-labelledby="title desc">
+  <title id="title">VulnScan Pro Scan Flowchart</title>
+  <desc id="desc">Flowchart showing startup, scan validation, concurrent engine execution, queue-driven UI updates, history persistence, and optional export.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#08111d" />
+      <stop offset="60%" stop-color="#0b1728" />
+      <stop offset="100%" stop-color="#132033" />
+    </linearGradient>
+    <linearGradient id="lane" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f1b2f" stop-opacity="0.96" />
+      <stop offset="100%" stop-color="#0b1424" stop-opacity="0.96" />
+    </linearGradient>
+    <linearGradient id="uiBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#12304d" />
+      <stop offset="100%" stop-color="#0e2339" />
+    </linearGradient>
+    <linearGradient id="engineBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10383a" />
+      <stop offset="100%" stop-color="#0d262b" />
+    </linearGradient>
+    <linearGradient id="dataBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b2c12" />
+      <stop offset="100%" stop-color="#241b0b" />
+    </linearGradient>
+    <linearGradient id="decisionBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#26344a" />
+      <stop offset="100%" stop-color="#1a2331" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#02060c" flood-opacity="0.35" />
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#7dd3fc" />
+    </marker>
+    <style>
+      .title { font: 700 34px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #f8fafc; }
+      .subtitle { font: 400 16px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #9fb2c9; }
+      .lane { fill: url(#lane); stroke: #21405f; stroke-width: 1.4; rx: 26; filter: url(#shadow); }
+      .lane-title { font: 700 18px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #dbeafe; }
+      .lane-sub { font: 400 12px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #7f94ad; }
+      .box { stroke: #32547a; stroke-width: 1.2; rx: 20; filter: url(#shadow); }
+      .box-ui { fill: url(#uiBox); }
+      .box-engine { fill: url(#engineBox); }
+      .box-data { fill: url(#dataBox); }
+      .decision { fill: url(#decisionBox); stroke: #38567d; stroke-width: 1.2; filter: url(#shadow); }
+      .box-title { font: 700 16px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #f8fafc; }
+      .box-sub { font: 400 12px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #9dc0df; }
+      .arrow { fill: none; stroke: #7dd3fc; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .arrow-soft { fill: none; stroke: #38bdf8; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); opacity: 0.82; }
+      .label { font: 600 12px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #7dd3fc; }
+      .footer { font: 400 13px 'Avenir Next', 'Segoe UI', Arial, sans-serif; fill: #8ea7c4; }
+      .dashed { fill: none; stroke: #2f567f; stroke-width: 1.6; stroke-dasharray: 10 8; rx: 26; }
+    </style>
+  </defs>
+
+  <rect width="1500" height="2100" fill="url(#bg)" />
+  <text x="70" y="78" class="title">VulnScan Pro Scan Lifecycle Flowchart</text>
+
+  <rect x="50" y="150" width="420" height="1820" class="lane" />
+  <rect x="540" y="150" width="460" height="1820" class="lane" />
+  <rect x="1070" y="150" width="380" height="1820" class="lane" />
+
+  <text x="80" y="190" class="lane-title">UI and Controller</text>
+  <text x="80" y="210" class="lane-sub">main.py and scanner_app.py</text>
+  <text x="570" y="190" class="lane-title">Background Thread and Engine</text>
+  <text x="570" y="210" class="lane-sub">ScannerEngine and queue-driven events</text>
+  <text x="1100" y="190" class="lane-title">Persistence and Outputs</text>
+  <text x="1100" y="210" class="lane-sub">History snapshots and exported reports</text>
+
+  <rect x="95" y="245" width="330" height="78" class="box box-ui" />
+  <text x="260" y="284" text-anchor="middle" class="box-title">Launch Application</text>
+  <text x="260" y="306" text-anchor="middle" class="box-sub">main.py creates ScannerApp</text>
+
+  <rect x="95" y="370" width="330" height="88" class="box box-ui" />
+  <text x="260" y="407" text-anchor="middle" class="box-title">Load Saved State</text>
+  <text x="260" y="429" text-anchor="middle" class="box-sub">Read settings and history, then</text>
+  <text x="260" y="447" text-anchor="middle" class="box-sub">initialize dashboard widgets</text>
+
+  <rect x="95" y="505" width="330" height="78" class="box box-ui" />
+  <text x="260" y="544" text-anchor="middle" class="box-title">Idle Dashboard</text>
+  <text x="260" y="566" text-anchor="middle" class="box-sub">Await target and scan options</text>
+
+  <rect x="110" y="635" width="300" height="110" class="decision" transform="rotate(45 260 690)" />
+  <text x="260" y="682" text-anchor="middle" class="box-title">Start Scan?</text>
+  <text x="260" y="704" text-anchor="middle" class="box-sub">User clicks Start</text>
+
+  <rect x="95" y="785" width="330" height="96" class="box box-ui" />
+  <text x="260" y="823" text-anchor="middle" class="box-title">Validate Runtime Settings</text>
+  <text x="260" y="845" text-anchor="middle" class="box-sub">Target, timeout, workers,</text>
+  <text x="260" y="863" text-anchor="middle" class="box-sub">history limit, and ports</text>
+
+  <rect x="110" y="935" width="300" height="110" class="decision" transform="rotate(45 260 990)" />
+  <text x="260" y="982" text-anchor="middle" class="box-title">Valid?</text>
+  <text x="260" y="1004" text-anchor="middle" class="box-sub">If not, show error</text>
+
+  <rect x="1095" y="945" width="300" height="88" class="box box-data" />
+  <text x="1245" y="982" text-anchor="middle" class="box-title">Validation Error</text>
+  <text x="1245" y="1004" text-anchor="middle" class="box-sub">Show dialog and return</text>
+  <text x="1245" y="1022" text-anchor="middle" class="box-sub">to idle dashboard</text>
+
+  <rect x="95" y="1095" width="330" height="104" class="box box-ui" />
+  <text x="260" y="1133" text-anchor="middle" class="box-title">Initialize Scan State</text>
+  <text x="260" y="1155" text-anchor="middle" class="box-sub">Reset results, create stop_event,</text>
+  <text x="260" y="1173" text-anchor="middle" class="box-sub">disable start, enable stop</text>
+
+  <rect x="585" y="1095" width="370" height="104" class="box box-engine" />
+  <text x="770" y="1133" text-anchor="middle" class="box-title">Start Background Scan Thread</text>
+  <text x="770" y="1155" text-anchor="middle" class="box-sub">Create ScannerEngine with timeout,</text>
+  <text x="770" y="1173" text-anchor="middle" class="box-sub">max_workers, and stop_event</text>
+
+  <rect x="585" y="1245" width="370" height="94" class="box box-engine" />
+  <text x="770" y="1282" text-anchor="middle" class="box-title">run_full_scan Begins</text>
+  <text x="770" y="1304" text-anchor="middle" class="box-sub">Emit initial status and submit</text>
+  <text x="770" y="1322" text-anchor="middle" class="box-sub">parallel scan tasks</text>
+
+  <rect x="555" y="1390" width="430" height="250" class="dashed" />
+  <text x="580" y="1422" class="lane-title">Concurrent Engine Work</text>
+  <text x="580" y="1442" class="lane-sub">Each completed task becomes an event payload</text>
+
+  <rect x="590" y="1475" width="160" height="92" class="box box-engine" />
+  <text x="670" y="1512" text-anchor="middle" class="box-title">DNS Task</text>
+  <text x="670" y="1534" text-anchor="middle" class="box-sub">Records and intel</text>
+  <text x="670" y="1552" text-anchor="middle" class="box-sub">collection</text>
+
+  <rect x="790" y="1475" width="160" height="92" class="box box-engine" />
+  <text x="870" y="1512" text-anchor="middle" class="box-title">Web Task</text>
+  <text x="870" y="1534" text-anchor="middle" class="box-sub">Headers, cookies,</text>
+  <text x="870" y="1552" text-anchor="middle" class="box-sub">forms, XSS, SQLi</text>
+
+  <rect x="590" y="1588" width="160" height="92" class="box box-engine" />
+  <text x="670" y="1625" text-anchor="middle" class="box-title">TLS Task</text>
+  <text x="670" y="1647" text-anchor="middle" class="box-sub">Handshake, certs,</text>
+  <text x="670" y="1665" text-anchor="middle" class="box-sub">weak protocols</text>
+
+  <rect x="790" y="1588" width="160" height="92" class="box box-engine" />
+  <text x="870" y="1625" text-anchor="middle" class="box-title">Port Tasks</text>
+  <text x="870" y="1647" text-anchor="middle" class="box-sub">TCP connect scan</text>
+  <text x="870" y="1665" text-anchor="middle" class="box-sub">and banner probing</text>
+
+  <rect x="585" y="1705" width="370" height="92" class="box box-engine" />
+  <text x="770" y="1742" text-anchor="middle" class="box-title">Push Event to message_queue</text>
+  <text x="770" y="1764" text-anchor="middle" class="box-sub">status, dns, web, tls, port,</text>
+  <text x="770" y="1782" text-anchor="middle" class="box-sub">complete, or cancelled</text>
+
+  <rect x="95" y="1390" width="330" height="104" class="box box-ui" />
+  <text x="260" y="1428" text-anchor="middle" class="box-title">Process Queue on Tk Loop</text>
+  <text x="260" y="1450" text-anchor="middle" class="box-sub">Consume message_queue events</text>
+  <text x="260" y="1468" text-anchor="middle" class="box-sub">every 120 ms</text>
+
+  <rect x="95" y="1535" width="330" height="104" class="box box-ui" />
+  <text x="260" y="1573" text-anchor="middle" class="box-title">Update Views and Logs</text>
+  <text x="260" y="1595" text-anchor="middle" class="box-sub">Refresh tabs, metrics, progress,</text>
+  <text x="260" y="1613" text-anchor="middle" class="box-sub">and live findings</text>
+
+  <rect x="110" y="1688" width="300" height="110" class="decision" transform="rotate(45 260 1743)" />
+  <text x="260" y="1735" text-anchor="middle" class="box-title">More Tasks</text>
+  <text x="260" y="1757" text-anchor="middle" class="box-sub">Pending?</text>
+
+  <rect x="1095" y="1688" width="300" height="110" class="decision" transform="rotate(45 1245 1743)" />
+  <text x="1245" y="1735" text-anchor="middle" class="box-title">Stop Clicked?</text>
+  <text x="1245" y="1757" text-anchor="middle" class="box-sub">Cancellation path</text>
+
+  <rect x="1095" y="1840" width="300" height="94" class="box box-engine" />
+  <text x="1245" y="1877" text-anchor="middle" class="box-title">Wait for Completed Futures</text>
+  <text x="1245" y="1899" text-anchor="middle" class="box-sub">Continue polling until the next</text>
+  <text x="1245" y="1917" text-anchor="middle" class="box-sub">task finishes</text>
+
+  <rect x="585" y="1840" width="370" height="94" class="box box-ui" />
+  <text x="770" y="1877" text-anchor="middle" class="box-title">Finalize Scan</text>
+  <text x="770" y="1899" text-anchor="middle" class="box-sub">Set status, finished_at, duration,</text>
+  <text x="770" y="1917" text-anchor="middle" class="box-sub">progress, and export availability</text>
+
+  <rect x="1095" y="1980" width="300" height="88" class="box box-engine" />
+  <text x="1245" y="2017" text-anchor="middle" class="box-title">Cancelled Event</text>
+  <text x="1245" y="2039" text-anchor="middle" class="box-sub">Engine stops active work</text>
+  <text x="1245" y="2057" text-anchor="middle" class="box-sub">and returns control</text>
+
+  <rect x="95" y="1840" width="330" height="94" class="box box-ui" />
+  <text x="260" y="1877" text-anchor="middle" class="box-title">Refresh Dashboard</text>
+  <text x="260" y="1899" text-anchor="middle" class="box-sub">Rebuild live views and</text>
+  <text x="260" y="1917" text-anchor="middle" class="box-sub">history list UI</text>
+
+  <rect x="1095" y="1095" width="300" height="94" class="box box-data" />
+  <text x="1245" y="1132" text-anchor="middle" class="box-title">Load and Save Settings</text>
+  <text x="1245" y="1154" text-anchor="middle" class="box-sub">settings.json persists defaults</text>
+  <text x="1245" y="1172" text-anchor="middle" class="box-sub">and last-used values</text>
+
+  <rect x="1095" y="1245" width="300" height="104" class="box box-data" />
+  <text x="1245" y="1283" text-anchor="middle" class="box-title">append_history</text>
+  <text x="1245" y="1305" text-anchor="middle" class="box-sub">Write scan snapshot and full</text>
+  <text x="1245" y="1323" text-anchor="middle" class="box-sub">results into scan_history.json</text>
+
+  <rect x="1095" y="1535" width="300" height="104" class="box box-data" />
+  <text x="1245" y="1573" text-anchor="middle" class="box-title">Export Report</text>
+  <text x="1245" y="1595" text-anchor="middle" class="box-sub">Write JSON, CSV, HTML,</text>
+  <text x="1245" y="1613" text-anchor="middle" class="box-sub">or PDF to chosen path</text>
+
+  <rect x="110" y="1988" width="300" height="110" class="decision" transform="rotate(45 260 2043)" />
+  <text x="260" y="2035" text-anchor="middle" class="box-title">Export?</text>
+  <text x="260" y="2057" text-anchor="middle" class="box-sub">Optional user action</text>
+
+  <rect x="95" y="1760" width="330" height="4" fill="#21405f" opacity="0.2" />
+
+  <path d="M260 323 L260 370" class="arrow" />
+  <path d="M260 458 L260 505" class="arrow" />
+  <path d="M260 583 L260 635" class="arrow" />
+  <path d="M260 745 L260 785" class="arrow" />
+  <path d="M260 881 L260 935" class="arrow" />
+  <path d="M410 990 L1095 989" class="arrow-soft" />
+  <text x="720" y="976" class="label">no</text>
+  <path d="M260 1045 L260 1095" class="arrow" />
+  <text x="284" y="1074" class="label">yes</text>
+  <path d="M425 1147 L585 1147" class="arrow" />
+  <path d="M770 1199 L770 1245" class="arrow" />
+  <path d="M770 1339 L770 1390" class="arrow" />
+  <path d="M585 1751 L425 1442" class="arrow-soft" />
+  <text x="470" y="1598" class="label">events</text>
+  <path d="M260 1494 L260 1535" class="arrow" />
+  <path d="M260 1639 L260 1688" class="arrow" />
+  <path d="M410 1743 L1095 1743" class="arrow-soft" />
+  <text x="724" y="1729" class="label">yes</text>
+  <path d="M1245 1798 L1245 1840" class="arrow" />
+  <text x="1268" y="1822" class="label">no</text>
+  <path d="M1245 1934 L1245 1980" class="arrow" />
+  <text x="1268" y="1958" class="label">stop</text>
+  <path d="M1095 1887 L985 1887" class="arrow-soft" />
+  <path d="M955 1887 L955 1743 L410 1743" class="arrow-soft" />
+  <text x="914" y="1788" class="label">next result</text>
+  <path d="M260 1798 L260 1840" class="arrow" />
+  <text x="282" y="1820" class="label">no</text>
+  <path d="M770 1934 L770 2043 L410 2043" class="arrow-soft" />
+  <path d="M1245 2068 L1245 1887 L955 1887" class="arrow-soft" />
+  <path d="M260 1934 L260 1988" class="arrow" />
+  <path d="M410 2043 L1095 1587" class="arrow-soft" />
+  <text x="745" y="1800" class="label">yes</text>
+  <path d="M260 2098 L260 505" class="arrow-soft" />
+  <text x="282" y="2122" class="label">no</text>
+  <path d="M410 2043 L1095 1587" class="arrow-soft" opacity="0" />
+  <path d="M410 2043 L1095 1587" class="arrow-soft" />
+  <path d="M1245 1639 L1245 1688" class="arrow-soft" />
+  <text x="1268" y="1664" class="label">yes</text>
+  <path d="M1095 1297 L955 1297 L955 1887" class="arrow-soft" />
+  <text x="980" y="1320" class="label">history</text>
+  <path d="M1095 1142 L425 1142" class="arrow-soft" />
+  <text x="760" y="1128" class="label">settings</text>
+  <path d="M1395 1587 L1425 1587" class="arrow-soft" />
+
+</svg>

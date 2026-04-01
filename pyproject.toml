@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vulnscan-pro"
+version = "2.1.0"
+description = "Desktop and CLI vulnerability scanner with reporting and scan provenance."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "dnspython>=2.6.1",
+    "requests>=2.32.3",
+    "reportlab>=4.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.10.0",
+]
+
+[project.scripts]
+vulnscan-pro = "main:main"
+vulnscan-pro-scan = "scanner_cli:main"
+vulnscan-benchmark = "benchmark_runner:main"
+vulnscan-benchmark-eval = "benchmark_metrics:main"
+vulnscan-benchmark-lab = "benchmark_lab:main"
+
+[tool.setuptools]
+py-modules = [
+    "benchmark_lab",
+    "benchmark_metrics",
+    "benchmark_runner",
+    "main",
+    "scanner_app",
+    "scanner_cli",
+    "scanner_engine",
+    "scanner_metadata",
+    "scanner_reporting",
+    "scanner_session",
+    "scanner_storage",
+]

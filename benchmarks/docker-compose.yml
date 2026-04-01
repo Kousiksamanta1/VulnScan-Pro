@@ -1,0 +1,20 @@
+services:
+  reflected-xss-lab:
+    build: ./apps/reflected_xss_lab
+    ports:
+      - "8081:8081"
+
+  sqli-lab:
+    build: ./apps/sqli_lab
+    ports:
+      - "8082:8082"
+
+  header-cookie-lab:
+    build: ./apps/header_cookie_lab
+    ports:
+      - "8083:8083"
+
+  tcp-banner-lab:
+    build: ./apps/tcp_banner_lab
+    ports:
+      - "2525:2525"
