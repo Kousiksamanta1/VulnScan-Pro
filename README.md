@@ -1,4 +1,13 @@
+<p align="center">
+  <img src="docs/social-preview.png" alt="VulnScan Pro social preview" width="100%" />
+</p>
+
 # VulnScan Pro
+
+[![Tests](https://github.com/Kousiksamanta1/VulnScan-Pro/actions/workflows/tests.yml/badge.svg)](https://github.com/Kousiksamanta1/VulnScan-Pro/actions/workflows/tests.yml)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-2cff88.svg)](LICENSE)
+[![Portfolio](https://img.shields.io/badge/Portfolio-Operator_Archive-66e3ff)](https://kousiksamanta1.github.io/PORTFOLIO/)
 
 VulnScan Pro is a desktop vulnerability scanner built with Python and `customtkinter`.
 It combines TCP port scanning, DNS lookups, TLS inspection, passive web analysis,
@@ -79,49 +88,143 @@ report export in a single desktop app.
 - `scanner_storage.py`: settings, history, snapshots, and comparison helpers
 - `scanner_reporting.py`: report generation for `JSON`, `CSV`, `HTML`, and `PDF`
 
-## Installation
+## Quick Start
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+### Requirements
+
+- Python 3.10 or newer
+- `pip`
+- A desktop environment for the GUI
+- Docker only if you want to run the optional local benchmark lab
+
+Run every command below from the project root, the directory containing
+`main.py` and `requirements.txt`.
+
+### macOS or Linux
+
+1. Create and activate a virtual environment:
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+2. Install the dependencies:
+
+   ```bash
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt
+   ```
+
+3. Start the desktop application:
+
+   ```bash
+   python main.py
+   ```
+
+### Windows PowerShell
+
+1. Create and activate a virtual environment:
+
+   ```powershell
+   py -3.10 -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. Install the dependencies:
+
+   ```powershell
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt
+   ```
+
+3. Start the desktop application:
+
+   ```powershell
+   python main.py
+   ```
+
+If PowerShell blocks virtual-environment activation, run this once in the
+current terminal and then activate it again:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-Or install the project in editable mode:
+### Run Without Activating the Environment
 
-```bash
-pip install -e .
-```
-
-Optional build dependencies:
-
-```bash
-pip install -r requirements-dev.txt
-```
-
-## Run
-
-```bash
-python3 main.py
-```
-
-Or with the local virtual environment:
+On macOS or Linux:
 
 ```bash
 .venv/bin/python main.py
 ```
 
-Headless CLI mode for repeatable experiments:
+On Windows:
 
-```bash
-python3 main.py scan https://example.com --ports web --format html --output reports/example.html
+```powershell
+.\.venv\Scripts\python.exe main.py
 ```
 
-Or print the full JSON result to stdout:
+## Command-Line Scans
+
+Use CLI mode when you do not want to open the desktop interface:
 
 ```bash
-python3 scanner_cli.py example.com --ports common --print-json
+python main.py scan https://example.com --ports web
 ```
+
+Save an HTML report:
+
+```bash
+python main.py scan https://example.com --ports web --output reports/example.html
+```
+
+Print the complete JSON result:
+
+```bash
+python scanner_cli.py example.com --ports common --print-json
+```
+
+Show all CLI options:
+
+```bash
+python main.py --help
+```
+
+Common port values include `common`, `top100`, `web`, `database`, `mail`,
+`remote`, explicit lists such as `22,80,443`, and ranges such as `1-1024`.
+
+## Optional Editable Install
+
+Installing the project in editable mode adds command shortcuts to the active
+virtual environment:
+
+```bash
+python -m pip install -e .
+vulnscan-pro
+```
+
+After that, CLI scans can be run with:
+
+```bash
+vulnscan-pro-scan https://example.com --ports web
+```
+
+Optional packaging dependencies can be installed with:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+## Troubleshooting
+
+- `ModuleNotFoundError`: activate `.venv` and run
+  `python -m pip install -r requirements.txt`.
+- `python: command not found`: use `python3` on macOS/Linux or `py` on Windows.
+- GUI does not open on Linux: install your distribution's Tk package, commonly
+  `python3-tk`, then recreate the virtual environment if necessary.
+- Permission or connection errors during a scan: confirm the target is reachable
+  and that you are authorized to scan it.
 
 ## Benchmark Workflow
 
@@ -219,3 +322,16 @@ The project also includes `pyproject.toml` so it can be installed and scripted a
 ## Authorized Use
 
 Use this tool only on systems and networks you own or are explicitly authorized to assess.
+
+## Contributing
+
+Contributions should include tests and use only controlled, authorized targets.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
+
+## Security
+
+Report security-sensitive findings according to [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

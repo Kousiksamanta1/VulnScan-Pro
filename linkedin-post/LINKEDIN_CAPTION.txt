@@ -1,0 +1,28 @@
+I’ve built VulnScan Pro, a Python desktop application designed for cross-platform use and created to make authorized vulnerability assessments more structured, repeatable, and easier to understand.
+
+It combines several security assessment capabilities into one workflow:
+
+• Concurrent TCP port scanning and service banner detection
+• DNS intelligence and TLS posture analysis
+• Security header, cookie, form, and parameter analysis
+• Lightweight XSS and SQL injection indicators
+• Scan history and result comparison
+• JSON, CSV, HTML, and PDF report generation
+• Desktop GUI and headless CLI operation
+• A Docker-based lab for repeatable benchmarking
+
+The application is built with Python, CustomTkinter, Requests, dnspython, and ReportLab. Its core functionality is designed to work on macOS, Windows, and Linux.
+
+My goal was to go beyond simply displaying findings. VulnScan Pro records scan configuration and runtime metadata, preserves previous results, and supports controlled evaluation using intentionally vulnerable local fixtures.
+
+Building this project strengthened my understanding of concurrent networking, web security analysis, desktop application development, reporting, and reproducible security testing.
+
+VulnScan Pro is intended only for systems and networks you own or are explicitly authorized to assess. Findings should be treated as indicators for further investigation, not proof of exploitability.
+
+The project has currently been tested on macOS, with Windows and Linux validation planned.
+
+GitHub: https://github.com/Kousiksamanta1/VulnScan-Pro
+
+I’d appreciate feedback on the scanning workflow, reporting system, and benchmark design.
+
+#Python #CyberSecurity #InfoSec #SoftwareDevelopment #OpenSource
